@@ -1,6 +1,8 @@
 import os
 import pandas as pd
 
+# GLOBALS
+chrom_list = [f"chr{i}" for i in range(23)] + ["chrX", "chrY"]
 
 def sort_filter2_df(
     df, cols={"sample": True, "Chr": True, "TVAF": False, "NVAF": False, "Start": True}
@@ -9,7 +11,6 @@ def sort_filter2_df(
     helper for sorting dfs for chromosomes using Chr, Start + cols in cols
     """
     # make Chr column categorical for sorting .. and sort
-    chrom_list = [f"chr{i}" for i in range(23)] + ["chrX", "chrY"]
     df.loc[:, "Chr"] = pd.Categorical(df["Chr"], chrom_list)
     return df.sort_values(list(cols.keys()), ascending=list(cols.values()))
 

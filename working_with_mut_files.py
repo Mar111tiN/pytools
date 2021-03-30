@@ -3,11 +3,19 @@ import pandas as pd
 
 #################### GLOBALS ##############
 coords_pattern = r"(?P<Chr>chr[0-9XY]+):(?P<Start>[0-9]+)-(?P<End>[0-9]+)"
-
+chrom_list = [f"chr{i}" for i in range(23)] + ["chrX", "chrY"]
 
 def show_columns(df):
     for i, col in enumerate(df.columns):
         print(i, col)
+
+
+def cat_chrom(df):
+    '''
+    turns Chr columns into categorical
+    '''
+    df.loc[:, "Chr"] = pd.Categorical(df["Chr"], chrom_list)
+    return df
 
 
 def ken2mut(mut_file, sheet="result", hg38_bed="", selected_cols=[], trans_dict={}):
