@@ -5,15 +5,16 @@ import pandas as pd
 coords_pattern = r"(?P<Chr>chr[0-9XY]+):(?P<Start>[0-9]+)-(?P<End>[0-9]+)"
 chrom_list = [f"chr{i}" for i in range(23)] + ["chrX", "chrY"]
 
+
 def show_columns(df):
     for i, col in enumerate(df.columns):
         print(i, col)
 
 
 def cat_chrom(df):
-    '''
+    """
     turns Chr columns into categorical
-    '''
+    """
     df.loc[:, "Chr"] = pd.Categorical(df["Chr"], chrom_list)
     return df
 
@@ -149,6 +150,7 @@ def make_cohort(
     gzip=False,
     selected_columns=[],
     trans_dict={},
+    exclude_samples=[],
 ):
     """
     aggregates all filter files of a specified type
@@ -169,17 +171,24 @@ def make_cohort(
     else:
         files = [file for file in list(os.walk(folder))[0][2] if "-B.csv" in file]
     # get the samples from the file list
-    replace_pattern = f"-B.{filter_type}.csv" if filter_type else "-B.csv"
+    replace_pattern1 = f"-B.{filter_type}.csv" if filter_type else "-B.csv"
+    replace_pattern2 = f"-B.filter2.{filter_type}.csv"
     # print(replace_pattern)
-    samples = [f.replace(replace_pattern, "").replace("_", "") for f in files]
+    samples = [
+        f.replace(replace_pattern1, "").replace(replace_pattern2, "").replace("_", "")
+        for f in files
+    ]
 
     # load all the filter_dfs and include sample columns
     filter_dfs = []
     for file, sample in zip(files, samples):
-        print(file)
-        filter_df = pd.read_csv(os.path.join(folder, file), sep="\t")
-        filter_df["sample"] = sample
-        filter_dfs.append(filter_df)
+        if sample in exclude_samples:
+            print(f"Sample {sample} excluded!")
+        else:
+            print(sample, file)
+            filter_df = pd.read_csv(os.path.join(folder, file), sep="\t")
+            filter_df["sample"] = sample
+            filter_dfs.append(filter_df)
 
     # put sample first
     filter_df = pd.concat(filter_dfs).loc[:, ["sample"] + list(filter_df.columns)[:-1]]
