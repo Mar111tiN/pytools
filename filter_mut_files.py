@@ -4,8 +4,9 @@ import pandas as pd
 # GLOBALS
 chrom_list = [f"chr{i}" for i in range(23)] + ["chrX", "chrY"]
 
+
 def sort_filter2_df(
-    df, cols={"sample": True, "Chr": True, "TVAF": False, "NVAF": False, "Start": True}
+    df, cols={"PatID": True, "Chr": True, "TVAF": False, "NVAF": False, "Start": True}
 ):
     """
     helper for sorting dfs for chromosomes using Chr, Start + cols in cols
@@ -26,12 +27,13 @@ def filter2(
     pop_cols=["gnomAD", "esp6500siv2_all", "dbSNP153_AltFreq"],
     sample_file="",
     NVAF_factor=0.25,
+    isAML7=False,
 ):
     if sample_file:
         sample_df = pd.read_csv(sample_file, sep="\t")
         # apply normal_contamination to filter_df
         df = df.merge(
-            sample_df.loc[:, ["sample", "normal_contamination", "purity75"]]
+            sample_df.loc[:, ["PatID", "normal_contamination", "purity75"]]
         ).rename(dict(purity75="tumor_purity"), axis=1)
     else:
         df["normal_contamination"] = 0
@@ -40,14 +42,14 @@ def filter2(
     # DEFINE CANDIDATE
     # used for rescue and special thresholds
     is_candidate = (
-        (df["isCandidate"] == 1) | (df["isDriver"] == 1) | (df["ChipFreq"] > 0)
+        (df["isCandidate"] == 1) | (df["AMLDriver"] == 1) | (df["ChipFreq"] > 0)
     )
 
     # #### SWITCH FOR AML7
-
-    print("Including mutations on 7q to candidate list.")
-    is7q = df["cytoBand"].str.contains("^7q")
-    is_candidate = is_candidate | is7q
+    if isAML7:
+        print("Including mutations on 7q to candidate list.")
+        is7q = df["cytoBand"].str.contains("^7q")
+        is_candidate = is_candidate | is7q
 
     # ##### TUMOR DEPTH ############
     tumor_depth = (df["TR2"] >= thresh["variantT"]) & (df["Tdepth"] >= thresh["Tdepth"])
@@ -67,8 +69,8 @@ def filter2(
     # ##### EB/PoN-Filter ##########
     eb = (df["EBscore"] >= thresh["EBscore"]) if thresh["EBscore"] else True
 
-    pon_eb = (eb & (df["PonRatio"] < thresh["PonRatio"])) | (
-        df["PonAltNonZeros"] < thresh["PonAltNonZeros"]
+    pon_eb = (eb & (df["PONRatio"] < thresh["PONRatio"])) | (
+        df["PONAltNonZeros"] < thresh["PONAltNonZeros"]
     )
 
     # ############ HDR ####################
@@ -123,7 +125,28 @@ def filter2(
     print(f"{stringency} {len(filter2_df.index)}")
     dropped_candidates_df = df[~filter_criteria & is_candidate]
 
-    return (sort_filter2_df(filter2_df), sort_filter2_df(dropped_candidates_df))
+    return (
+        sort_filter2_df(
+            filter2_df,
+            cols={
+                "PatID": True,
+                "Chr": True,
+                "TVAF": False,
+                "NVAF": False,
+                "Start": True,
+            },
+        ),
+        sort_filter2_df(
+            dropped_candidates_df,
+            cols={
+                "PatID": True,
+                "Chr": True,
+                "TVAF": False,
+                "NVAF": False,
+                "Start": True,
+            },
+        ),
+    )
 
 
 def filter2excel(filter2_df, filter2_dropped, out_file):
@@ -133,22 +156,22 @@ def filter2excel(filter2_df, filter2_dropped, out_file):
 
     # make additional agg files
     sample_df = (
-        filter2_df.groupby(["sample", "Gene"])
+        filter2_df.groupby(["PatID", "Gene"])
         .agg({"Chr": "count"})
         .reset_index("Gene")
-        .groupby("sample")
+        .groupby("PatID")
         .count()
         .loc[:, ["Gene"]]
         .reset_index()
     )
 
     gene_df = (
-        filter2_df.groupby(["sample", "Gene"])
+        filter2_df.groupby(["PatID", "Gene"])
         .first()
         .reset_index()
         .groupby("Gene")
-        .agg({"sample": "count"})
-        .sort_values("sample", ascending=False)
+        .agg({"PatID": "count"})
+        .sort_values("PatID", ascending=False)
         .reset_index()
     )
 
@@ -170,8 +193,10 @@ def write_filter(
     sample_file="",  # file containing the sample information (see example_data/sample_list.txt)
     NVAF_factor=0.25,  # experimental factor for taking sample contamination into account
     csv_output=True,
+    pop_cols=[],
     excel_output=True,
     skip_samples=[],
+    isAML7=False,
 ):
     """
     takes a filter file (gz-compressed filter file)
@@ -197,6 +222,8 @@ def write_filter(
             filter_settings=filter_settings_df,
             stringency=stringency,
             sample_file=sample_file,
+            pop_cols=pop_cols,
+            isAML7=isAML7,
         )
         if csv_output:
             filter2_df.to_csv(out_file_base + f".{stringency}.csv", sep="\t")
